@@ -1,11 +1,18 @@
 # CodeRunner Native
 
-Expo React Native code runner for **Python** and **JavaScript** with:
+Expo React Native code runner for **Python** and **JavaScript** (v1.1).
 
-- Syntax-highlighted editor (CodeMirror) with copy / paste / clear
-- Full console input: Python `input()`, JS `prompt()` / `input()`
-- Python stdlib + micropip packages (Packages submenu)
-- Signed Android release APK workflow
+## Highlights
+
+- Offline CodeMirror editor (vendored, no CDN)
+- Offline Python runtime cache (downloads once, then file:// boot)
+- `input()` / `prompt()` console bridging
+- Projects save/load/import/export/share
+- Lessons with output checking
+- Packages catalog + micropip
+- Hardened JS sandbox (no fetch/XHR), run timeouts
+- Console copy/collapse, error-line jump, stdin history
+- Editor/console split controls and toolbar Run/Stop
 
 ## Quick start
 
@@ -14,48 +21,24 @@ npm install
 npm run start
 ```
 
-First run downloads the Pyodide runtime from jsDelivr (network required).
-
-## Features
-
-| Capability | How |
-| --- | --- |
-| `print` / stdout / stderr | Pyodide stdout hooks → console panel |
-| `input()` | Lexical rewrite → async RN stdin prompt |
-| `import math`, etc. | CPython stdlib in Pyodide |
-| `import numpy` | `loadPackagesFromImports` + micropip |
-| Stop | Interrupt pending stdin / run |
+First Python launch may download ~50MB into app storage for offline reuse. The editor works offline immediately.
 
 ## Scripts
 
 | Script | Purpose |
 | --- | --- |
 | `npm run typecheck` | TypeScript |
-| `npm test` | Unit tests (input transform) |
-| `npm run keystore` | Create release keystore |
-| `npm run apk:release` | Prebuild + signed `assembleRelease` |
-| `npm run eas:preview:apk` | Optional EAS local APK |
+| `npm test` | Unit tests |
+| `npm run embed:codemirror` | Regenerate offline editor assets |
+| `npm run apk:release` | Signed Android APK |
+| `npm run eas:ios:preview` | iOS preview via EAS |
 
-## Signed APK
+## Maestro smoke
 
-```powershell
-npm run apk:release
-```
-
-Output: `dist/CodeRunnerNative-release.apk`
-
-Install:
-
-```powershell
-& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r dist\CodeRunnerNative-release.apk
+```bash
+maestro test maestro/smoke.yaml
 ```
 
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Notes
-
-- Pure-Python and Pyodide-compatible wheels install via micropip.
-- Native CPython wheels that are not published for Pyodide will fail to install.
-- Runtime CDN load requires `INTERNET` (declared in app config).

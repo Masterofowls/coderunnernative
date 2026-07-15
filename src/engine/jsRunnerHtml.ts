@@ -1,4 +1,4 @@
-/** Inline JS sandbox with console + prompt/input bridging. */
+/** Hardened JS sandbox with console + prompt/input bridging + timeout. */
 export const JS_RUNNER_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -16,11 +16,42 @@ export const JS_RUNNER_HTML = `<!DOCTYPE html>
     const pendingInputs = new Map();
     let running = false;
     let interrupted = false;
+    let runTimer = null;
+    let stdoutBuf = [];
+    let flushTimer = null;
+
+    // Soft sandbox: block network / navigation APIs (do not rebind eval — illegal in strict mode).
+    try {
+      window.fetch = function () {
+        throw new Error('fetch() is disabled in the sandbox. Use console I/O instead.');
+      };
+    } catch (e) {}
+    try {
+      window.XMLHttpRequest = function () {
+        throw new Error('XMLHttpRequest is disabled in the sandbox.');
+      };
+    } catch (e) {}
+    try {
+      window.open = function () { throw new Error('window.open is disabled.'); };
+    } catch (e) {}
 
     function send(payload) {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify(payload));
       }
+    }
+
+    function flushStdout() {
+      flushTimer = null;
+      if (stdoutBuf.length) {
+        send({ type: 'stdout', data: stdoutBuf.join('') });
+        stdoutBuf = [];
+      }
+    }
+
+    function queueStdout(text) {
+      stdoutBuf.push(String(text));
+      if (!flushTimer) flushTimer = setTimeout(flushStdout, 32);
     }
 
     function setStatus(message) {
@@ -39,9 +70,7 @@ export const JS_RUNNER_HTML = `<!DOCTYPE html>
       }).join(' ');
     }
 
-    console.log = function () {
-      send({ type: 'stdout', data: formatArgs(arguments) + '\\n' });
-    };
+    console.log = function () { queueStdout(formatArgs(arguments) + '\\n'); };
     console.info = console.log;
     console.warn = function () {
       send({ type: 'stderr', data: formatArgs(arguments) + '\\n' });
@@ -58,24 +87,38 @@ export const JS_RUNNER_HTML = `<!DOCTYPE html>
       });
     };
 
-    async function runCode(code) {
+    async function runCode(code, timeoutMs) {
       if (running) throw new Error('A program is already running');
       running = true;
       interrupted = false;
       const started = Date.now();
+      const limit = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 15000;
       try {
         setStatus('Running…');
+        // Avoid "use strict" + eval/arguments bindings (SyntaxError in browsers).
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-        const fn = new AsyncFunction(code);
-        await fn();
+        const fn = new AsyncFunction(String(code || ''));
+        const work = Promise.resolve(fn());
+        const timeout = new Promise(function (_, reject) {
+          runTimer = setTimeout(function () {
+            interrupted = true;
+            reject(new Error('Timed out after ' + limit + ' ms (possible infinite loop)'));
+          }, limit);
+        });
+        await Promise.race([work, timeout]);
+        flushStdout();
         send({ type: 'done', ok: !interrupted, durationMs: Date.now() - started });
       } catch (err) {
+        flushStdout();
         const message = String(err && err.stack ? err.stack : err && err.message ? err.message : err);
-        if (!interrupted) {
+        if (!interrupted || message.indexOf('Timed out') >= 0) {
           send({ type: 'stderr', data: message + '\\n' });
+          send({ type: 'error_detail', message: message, line: null });
         }
         send({ type: 'done', ok: false, durationMs: Date.now() - started });
       } finally {
+        if (runTimer) clearTimeout(runTimer);
+        runTimer = null;
         running = false;
         setStatus('Ready');
       }
@@ -106,6 +149,7 @@ export const JS_RUNNER_HTML = `<!DOCTYPE html>
 
       if (msg.type === 'interrupt') {
         interrupted = true;
+        if (runTimer) clearTimeout(runTimer);
         pendingInputs.forEach(function (waiter) {
           waiter.reject(new Error('Interrupted'));
         });
@@ -114,19 +158,22 @@ export const JS_RUNNER_HTML = `<!DOCTYPE html>
       }
 
       if (msg.type === 'run') {
-        runCode(msg.code || '').catch(function (err) {
+        runCode(msg.code || '', msg.timeoutMs).catch(function (err) {
           send({ type: 'error', message: String(err && err.message ? err.message : err) });
           running = false;
         });
       }
     }
 
+    // RN WebView posts to document on Android, window on some hosts.
     document.addEventListener('message', function (event) {
       handleMessage(event.data);
     });
     window.addEventListener('message', function (event) {
       handleMessage(event.data);
     });
+    // Also accept injected bridge calls.
+    window.__coderunner_handle = handleMessage;
 
     setStatus('Ready');
     send({ type: 'ready', version: 'javascript', engine: 'javascript', pyodideVersion: 'javascript' });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { colors } from '../theme/colors';
 
@@ -7,9 +7,10 @@ interface StdinPromptProps {
   prompt: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
+  history?: string[];
 }
 
-export function StdinPrompt({ prompt, onSubmit, onCancel }: StdinPromptProps) {
+export function StdinPrompt({ prompt, onSubmit, onCancel, history = [] }: StdinPromptProps) {
   const [value, setValue] = useState('');
 
   useEffect(() => {
@@ -17,10 +18,21 @@ export function StdinPrompt({ prompt, onSubmit, onCancel }: StdinPromptProps) {
   }, [prompt]);
 
   return (
-    <View style={styles.wrap} accessibilityRole="none">
+    <View style={styles.wrap}>
       <Text style={styles.prompt} numberOfLines={2}>
         {prompt || 'input>'}
       </Text>
+      {history.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hist}>
+          {history.slice(-8).reverse().map((item, idx) => (
+            <Pressable key={`${item}-${idx}`} style={styles.histChip} onPress={() => setValue(item)}>
+              <Text style={styles.histText} numberOfLines={1}>
+                {item || '(empty)'}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       <View style={styles.row}>
         <TextInput
           style={styles.input}
@@ -33,22 +45,11 @@ export function StdinPrompt({ prompt, onSubmit, onCancel }: StdinPromptProps) {
           onSubmitEditing={() => onSubmit(value)}
           placeholder="Type console input…"
           placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Console input"
         />
-        <Pressable
-          style={({ pressed }) => [styles.btn, styles.primary, pressed && styles.pressed]}
-          onPress={() => onSubmit(value)}
-          accessibilityRole="button"
-          accessibilityLabel="Submit input"
-        >
+        <Pressable style={[styles.btn, styles.primary]} onPress={() => onSubmit(value)}>
           <Text style={styles.btnText}>Send</Text>
         </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.btn, styles.ghost, pressed && styles.pressed]}
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel input"
-        >
+        <Pressable style={[styles.btn, styles.ghost]} onPress={onCancel}>
           <Text style={styles.btnText}>Stop</Text>
         </Pressable>
       </View>
@@ -65,16 +66,19 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 8,
   },
-  prompt: {
-    color: colors.warning,
-    fontFamily: 'monospace',
-    fontSize: 13,
+  prompt: { color: colors.warning, fontFamily: 'monospace', fontSize: 13 },
+  hist: { gap: 6 },
+  histChip: {
+    maxWidth: 120,
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
+  histText: { color: colors.textMuted, fontSize: 11, fontFamily: 'monospace' },
+  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: {
     flex: 1,
     backgroundColor: colors.editorBg,
@@ -87,25 +91,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  btn: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  primary: {
-    backgroundColor: colors.accent,
-  },
+  btn: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  primary: { backgroundColor: colors.accent },
   ghost: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  pressed: {
-    opacity: 0.85,
-  },
-  btnText: {
-    color: colors.text,
-    fontWeight: '600',
-    fontSize: 13,
-  },
+  btnText: { color: colors.text, fontWeight: '600', fontSize: 13 },
 });

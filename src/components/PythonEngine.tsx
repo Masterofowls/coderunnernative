@@ -1,27 +1,38 @@
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
-import { PYODIDE_HTML } from '../engine/pyodideHtml';
+import { buildPyodideHtml, cdnPyodideIndexUrl, PYODIDE_VERSION } from '../engine/pyodideHtml';
+
+// re-export helpers used by screen
+void PYODIDE_VERSION;
 
 interface PythonEngineProps {
   onMessage: (raw: string) => void;
+  /** Local file:// index or CDN URL ending with / */
+  indexUrl: string | null;
+  active: boolean;
 }
 
 export const PythonEngine = forwardRef<WebView, PythonEngineProps>(function PythonEngine(
-  { onMessage },
+  { onMessage, indexUrl, active },
   ref,
 ) {
-  const handleMessage = (event: WebViewMessageEvent) => {
-    onMessage(event.nativeEvent.data);
-  };
+  const resolved = indexUrl ?? cdnPyodideIndexUrl();
+  const html = useMemo(() => buildPyodideHtml(resolved), [resolved]);
+
+  if (!active) return null;
 
   return (
     <View style={styles.host} pointerEvents="none" accessibilityElementsHidden>
       <WebView
         ref={ref}
-        source={{ html: PYODIDE_HTML, baseUrl: 'https://cdn.jsdelivr.net' }}
-        onMessage={handleMessage}
+        key={resolved}
+        source={{
+          html,
+          baseUrl: resolved.startsWith('file') ? resolved : 'https://cdn.jsdelivr.net',
+        }}
+        onMessage={(event: WebViewMessageEvent) => onMessage(event.nativeEvent.data)}
         javaScriptEnabled
         domStorageEnabled
         allowFileAccess
@@ -29,7 +40,6 @@ export const PythonEngine = forwardRef<WebView, PythonEngineProps>(function Pyth
         originWhitelist={['*']}
         mixedContentMode="always"
         setSupportMultipleWindows={false}
-        mediaPlaybackRequiresUserAction
         style={styles.webview}
       />
     </View>

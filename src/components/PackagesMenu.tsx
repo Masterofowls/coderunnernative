@@ -1,6 +1,17 @@
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { PackageBar } from './PackageBar';
+import { PYTHON_PACKAGE_CATALOG } from '../engine/pythonPackages';
 import { colors } from '../theme/colors';
 
 interface PackagesMenuProps {
@@ -22,13 +33,21 @@ export function PackagesMenu({
   onInstall,
   installedPackages,
 }: PackagesMenuProps) {
+  const [filter, setFilter] = useState('');
+
+  const filtered = PYTHON_PACKAGE_CATALOG.filter((p) => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    return p.name.includes(q) || p.hint.toLowerCase().includes(q);
+  });
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close packages menu">
+      <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
             <Text style={styles.title}>Python packages</Text>
-            <Pressable onPress={onClose} accessibilityRole="button">
+            <Pressable onPress={onClose}>
               <Text style={styles.close}>Close</Text>
             </Pressable>
           </View>
@@ -40,7 +59,6 @@ export function PackagesMenu({
               onValueChange={onAutoInstallChange}
               trackColor={{ false: colors.border, true: colors.accent }}
               thumbColor={colors.text}
-              accessibilityLabel="Automatically install imported packages"
             />
           </View>
 
@@ -50,9 +68,29 @@ export function PackagesMenu({
             installedPackages={installedPackages}
           />
 
-          <Text style={styles.hint}>
-            Uses micropip / Pyodide wheels. Hidden from the main screen to keep the editor large.
-          </Text>
+          <TextInput
+            value={filter}
+            onChangeText={setFilter}
+            placeholder="Search catalog…"
+            placeholderTextColor={colors.textMuted}
+            style={styles.search}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            {filtered.map((pkg) => (
+              <Pressable
+                key={pkg.name}
+                style={styles.item}
+                disabled={disabled}
+                onPress={() => onInstall([pkg.name])}
+              >
+                <Text style={styles.itemName}>{pkg.name}</Text>
+                <Text style={styles.itemHint}>{pkg.hint}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -72,35 +110,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 16,
-    gap: 14,
+    gap: 12,
+    maxHeight: '80%',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: {
+  title: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  close: { color: colors.accent, fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  switchLabel: { color: colors.textMuted, fontSize: 13, flex: 1 },
+  search: {
+    backgroundColor: colors.editorBg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
     color: colors.text,
-    fontSize: 17,
-    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  close: {
-    color: colors.accent,
-    fontWeight: '600',
+  list: { maxHeight: 220 },
+  listContent: { gap: 6 },
+  item: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 10,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  switchLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    flex: 1,
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: 11,
-    lineHeight: 16,
-  },
+  itemName: { color: colors.text, fontWeight: '700', fontFamily: 'monospace' },
+  itemHint: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
 });

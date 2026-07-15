@@ -1,0 +1,8 @@
+appId: com.coderunner.python
+----
+- launchApp
+- assertVisible: "CodeRunner Native"
+- tapOn: "Run"
+- extendedWaitUntil:
+    visible: "console"
+    timeout: 120000

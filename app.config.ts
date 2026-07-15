@@ -4,8 +4,8 @@ export default ({ config }: ConfigContext) => ({
   ...config,
   name: 'CodeRunner Native',
   slug: 'coderunner-native',
-  version: '1.0.0',
-  orientation: 'portrait' as const,
+  version: '1.1.0',
+  orientation: 'default' as const,
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark' as const,
   scheme: 'coderunnernative',
@@ -20,7 +20,7 @@ export default ({ config }: ConfigContext) => ({
   },
   android: {
     package: 'com.coderunner.python',
-    versionCode: 1,
+    versionCode: 2,
     adaptiveIcon: {
       backgroundColor: '#0f1419',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -33,7 +33,7 @@ export default ({ config }: ConfigContext) => ({
   web: {
     favicon: './assets/favicon.png',
   },
-  plugins: ['expo-dev-client'],
+  plugins: ['expo-dev-client', 'expo-sharing'],
   extra: {
     eas: {
       projectId: process.env.EAS_PROJECT_ID ?? '00000000-0000-4000-8000-000000000000',

@@ -2,48 +2,42 @@
 
 ## Overview
 
-CodeRunner Native is an Expo React Native app that runs **Python** (Pyodide) and
-**JavaScript** on-device inside hidden `WebView` sandboxes. The editor uses
-CodeMirror 5 for syntax highlighting.
+CodeRunner Native runs **Python (Pyodide)** and **JavaScript** in hidden WebViews,
+with an offline-capable CodeMirror editor embedded in the JS bundle.
 
 ```
-┌──────────────────────────────────────────────┐
-│ React Native UI                              │
-│  Lang tabs · Highlighted editor · Console    │
-│  Stdin prompt · Packages submenu (Python)    │
-└───────────────┬──────────────┬───────────────┘
-                │              │
-     ┌──────────▼───┐   ┌──────▼──────────┐
-     │ Pyodide WV   │   │ JS sandbox WV   │
-     │ input/micropip│   │ prompt()/input()│
-     └──────────────┘   └─────────────────┘
+┌────────────────────────────────────────────────────┐
+│ React Native UI                                    │
+│ Tabs · Projects · Lessons · Packages · Toolbar Run │
+│ Offline editor (CodeMirror vendor) · Console       │
+│ Runtime download banner · Stdin history            │
+└──────────────┬───────────────────┬─────────────────┘
+               │                   │
+     ┌─────────▼────────┐   ┌──────▼──────────┐
+     │ Pyodide WebView  │   │ JS sandbox WV   │
+     │ cache → file://  │   │ no fetch/XHR    │
+     │ timeout + batch  │   │ timeout + batch │
+     └──────────────────┘   └─────────────────┘
 ```
 
-## Why Pyodide
+## Offline strategy
 
-- Real CPython semantics (not a toy JS subset)
-- `import` for the Python standard library
-- Third-party wheels through `micropip` / `loadPackagesFromImports`
-- Works inside Expo without embedding a full native CPython toolchain
+1. **Editor** — CodeMirror CSS/JS vendored as base64 in `src/vendor/codemirrorEmbedded.ts`
+   (regenerate with `npm run embed:codemirror`).
+2. **Python** — `ensurePyodideCached()` downloads core Pyodide files to
+   `documentDirectory/runtime/pyodide/<version>/` with progress UI, then boots via
+   local `indexURL`. Falls back to CDN if download fails.
+3. **Packages** — micropip still needs network for new wheels; stdlib works offline
+   after core cache completes.
 
-`input()` is synchronous in CPython. Android WebViews typically lack
-`SharedArrayBuffer`, so the host transforms `input(...)` → `await __rn_input(...)`
-and wraps user code in an async `__user_main`.
+## Safety
 
-## Message protocol
+- JS: `fetch` / `XMLHttpRequest` / `window.open` blocked; eval/Function shadowed in
+  user AsyncFunction wrapper; default 15s timeout.
+- Python: default 30s timeout race; import-error hints for common unavailable modules.
 
-Host → Engine: `run`, `stdin`, `install`, `interrupt`, `ping`  
-Engine → Host: `ready`, `status`, `stdout`, `stderr`, `input_request`, `done`, `error`, `packages`
+## Persistence
 
-Validated on the RN side with Zod (`src/engine/protocol.ts`).
-
-## Android release
-
-Signed APKs are produced locally:
-
-1. `scripts/generate-keystore.ps1` — PKCS12 keystore (gitignored)
-2. `npx expo prebuild --platform android`
-3. `scripts/configure-android-signing.ps1` — wires Gradle release signing
-4. `gradlew assembleRelease` → `dist/CodeRunnerNative-release.apk`
-
-EAS profiles in `eas.json` also support cloud / local APK builds.
+- Per-language editor buffers + language tab
+- Named projects (`coderunner.projects.v1`)
+- Stdin history, split ratio, onboarding flag

@@ -1,5 +1,37 @@
 # Activity Log
 
+## 2026-07-15T03:46:00-07:00
+
+- Rebuilt signed release APK via `npm run apk:release` (same local pipeline).
+- Output: `dist/CodeRunnerNative-release.apk` (~68 MB), apksigner V2 verified.
+
+## 2026-07-15T03:15:00-07:00
+
+
+- Fixed JS Run: removed illegal `const eval` / `"use strict"` sandbox bindings
+  (Unexpected eval or arguments in strict mode).
+- Fixed Python Run: mount engine immediately on CDN (no longer blocked by offline
+  cache); deliver run commands via injectJavaScript bridge.
+
+## 2026-07-15T03:12:00-07:00
+
+- Removed non-working floating Run FAB; toolbar Run remains the run control.
+
+## 2026-07-15T03:09:00-07:00
+
+- Saved optimized local signed APK build workflow as skill `expo-signed-apk-build`
+  (`.cursor/skills`, `.agents/skills`, and `~/.cursor/skills`), including BOM /
+  package-name / CI=1 pitfalls and script pipeline reference.
+
+## 2026-07-15T02:45:00-07:00
+
+- v1.1 product pass: offline CodeMirror vendor + Pyodide runtime cache with
+  progress/retry; editor undo/redo/find/keyboard chips/FAB/split; console
+  copy/collapse/error jump/stdin history; Python package catalog + import hints +
+  timeouts; JS sandbox (no fetch/XHR) + timeouts; projects import/export/share;
+  lessons with Check; lazy/warm engines; batched stdout; Maestro smoke stub;
+  EAS iOS/AAB profiles; tests for lessons/errors/projects.
+
 ## 2026-07-14T19:19:00-07:00
 
 - Updated GitHub release `v1.0.0`: replaced APK (`~71 MB`) and refreshed release notes

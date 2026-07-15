@@ -16,7 +16,11 @@ interface ToolbarProps {
   onStop: () => void;
   onClearConsole: () => void;
   onOpenPackages?: () => void;
+  onOpenProjects: () => void;
+  onOpenLessons: () => void;
+  onCheckLesson?: () => void;
   canRun: boolean;
+  lessonActive?: boolean;
 }
 
 export function Toolbar({
@@ -30,7 +34,11 @@ export function Toolbar({
   onStop,
   onClearConsole,
   onOpenPackages,
+  onOpenProjects,
+  onOpenLessons,
+  onCheckLesson,
   canRun,
+  lessonActive,
 }: ToolbarProps) {
   const busy = status === 'running' || status === 'awaiting_input' || status === 'installing';
 
@@ -53,23 +61,18 @@ export function Toolbar({
           onPress={onRun}
           disabled={!canRun || busy}
           accessibilityRole="button"
-          accessibilityLabel="Run code"
         >
           <Text style={styles.btnTextDark}>Run</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.btn, styles.stop, pressed && styles.pressed]}
           onPress={onStop}
-          accessibilityRole="button"
-          accessibilityLabel="Stop code"
         >
           <Text style={styles.btnTextDark}>Stop</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.btn, styles.ghost, pressed && styles.pressed]}
           onPress={onClearConsole}
-          accessibilityRole="button"
-          accessibilityLabel="Clear console"
         >
           <Text style={styles.btnTextLight}>Clear</Text>
         </Pressable>
@@ -88,26 +91,30 @@ export function Toolbar({
             onPress={() => onLanguageChange('javascript')}
           />
         </View>
-        {language === 'python' && onOpenPackages ? (
-          <Pressable
-            style={({ pressed }) => [styles.btn, styles.ghost, pressed && styles.pressed]}
-            onPress={onOpenPackages}
-            accessibilityRole="button"
-            accessibilityLabel="Open packages menu"
-          >
-            <Text style={styles.btnTextLight}>Packages</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        <Pressable style={styles.chip} onPress={onOpenProjects}>
+          <Text style={styles.chipText}>Projects</Text>
+        </Pressable>
+        <Pressable style={styles.chip} onPress={onOpenLessons}>
+          <Text style={styles.chipText}>Lessons</Text>
+        </Pressable>
+        {lessonActive && onCheckLesson ? (
+          <Pressable style={[styles.chip, styles.chipAccent]} onPress={onCheckLesson}>
+            <Text style={styles.chipTextDark}>Check</Text>
+          </Pressable>
+        ) : null}
+        {language === 'python' && onOpenPackages ? (
+          <Pressable style={styles.chip} onPress={onOpenPackages}>
+            <Text style={styles.chipText}>Packages</Text>
+          </Pressable>
+        ) : null}
         {examples.map((example) => (
           <Pressable
             key={example.id}
-            style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+            style={styles.chip}
             onPress={() => onSelectExample(example)}
-            accessibilityRole="button"
-            accessibilityLabel={`Load example ${example.title}`}
           >
             <Text style={styles.chipText}>{example.title}</Text>
           </Pressable>
@@ -132,7 +139,6 @@ function LangTab({
       style={[styles.langTab, active && styles.langTabActive]}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={`Switch to ${label}`}
     >
       <Text style={[styles.langTabText, active && styles.langTabTextActive]}>{label}</Text>
     </Pressable>
@@ -140,61 +146,28 @@ function LangTab({
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    gap: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
+  wrap: { gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusBlock: { flex: 1, minWidth: 0 },
   brand: {
     color: colors.text,
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
-  status: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  btn: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  run: {
-    backgroundColor: colors.success,
-  },
-  stop: {
-    backgroundColor: colors.error,
-  },
+  status: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  btn: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  run: { backgroundColor: colors.success },
+  stop: { backgroundColor: colors.error },
   ghost: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  disabled: {
-    opacity: 0.45,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  btnTextDark: {
-    color: '#0b1016',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  btnTextLight: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 13,
-  },
+  disabled: { opacity: 0.45 },
+  pressed: { opacity: 0.85 },
+  btnTextDark: { color: '#0b1016', fontWeight: '700', fontSize: 13 },
+  btnTextLight: { color: colors.text, fontWeight: '700', fontSize: 13 },
   langGroup: {
     flex: 1,
     flexDirection: 'row',
@@ -205,27 +178,11 @@ const styles = StyleSheet.create({
     padding: 3,
     gap: 3,
   },
-  langTab: {
-    flex: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  langTabActive: {
-    backgroundColor: colors.accent,
-  },
-  langTabText: {
-    color: colors.textMuted,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  langTabTextActive: {
-    color: '#0b1016',
-  },
-  chips: {
-    gap: 8,
-    paddingRight: 4,
-  },
+  langTab: { flex: 1, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  langTabActive: { backgroundColor: colors.accent },
+  langTabText: { color: colors.textMuted, fontWeight: '700', fontSize: 12 },
+  langTabTextActive: { color: '#0b1016' },
+  chips: { gap: 8, paddingRight: 4 },
   chip: {
     backgroundColor: colors.surface,
     borderRadius: 999,
@@ -234,9 +191,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  chipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  chipAccent: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipText: { color: colors.text, fontSize: 12, fontWeight: '600' },
+  chipTextDark: { color: '#0b1016', fontSize: 12, fontWeight: '700' },
 });

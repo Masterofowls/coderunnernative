@@ -1,6 +1,6 @@
 {
   "name": "coderunner-native",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.ts",
   "private": true,
   "scripts": {
@@ -12,10 +12,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
+    "embed:codemirror": "node scripts/embed-codemirror.js",
     "prebuild:android": "expo prebuild --platform android --non-interactive",
     "keystore": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/generate-keystore.ps1",
     "apk:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-release-apk.ps1",
-    "eas:preview:apk": "eas build -p android --profile preview --local"
+    "eas:preview:apk": "eas build -p android --profile preview --local",
+    "eas:ios:preview": "eas build -p ios --profile preview"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
@@ -23,8 +25,12 @@
     "expo": "~57.0.4",
     "expo-clipboard": "~57.0.0",
     "expo-dev-client": "~57.0.5",
+    "expo-document-picker": "~57.0.0",
+    "expo-file-system": "~57.0.0",
     "expo-haptics": "~57.0.0",
     "expo-keep-awake": "~57.0.0",
+    "expo-network": "~57.0.0",
+    "expo-sharing": "~57.0.3",
     "expo-status-bar": "~57.0.0",
     "expo-system-ui": "~57.0.0",
     "react": "19.2.3",

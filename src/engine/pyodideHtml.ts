@@ -1,7 +1,11 @@
 /** Inline HTML shell that boots Pyodide inside the WebView. */
 export const PYODIDE_VERSION = '0.27.5';
 
-export const PYODIDE_HTML = `<!DOCTYPE html>
+export function buildPyodideHtml(indexURL: string): string {
+  const safeIndex = JSON.stringify(indexURL);
+  const scriptSrc = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/pyodide.js`;
+
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -13,18 +17,44 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div id="status">Loading Python runtime…</div>
-  <script src="https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/pyodide.js"></script>
+  <script src="${scriptSrc}"></script>
   <script>
+    const INDEX_URL = ${safeIndex};
     const statusEl = document.getElementById('status');
     const pendingInputs = new Map();
     let pyodide = null;
     let running = false;
     let interrupted = false;
+    let runTimer = null;
+    let stdoutBuf = [];
+    let stderrBuf = [];
+    let flushTimer = null;
 
     function send(payload) {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify(payload));
       }
+    }
+
+    function flushStreams() {
+      flushTimer = null;
+      if (stdoutBuf.length) {
+        send({ type: 'stdout', data: stdoutBuf.join('') });
+        stdoutBuf = [];
+      }
+      if (stderrBuf.length) {
+        send({ type: 'stderr', data: stderrBuf.join('') });
+        stderrBuf = [];
+      }
+    }
+
+    function queueStdout(text) {
+      stdoutBuf.push(String(text));
+      if (!flushTimer) flushTimer = setTimeout(flushStreams, 32);
+    }
+    function queueStderr(text) {
+      stderrBuf.push(String(text));
+      if (!flushTimer) flushTimer = setTimeout(flushStreams, 32);
     }
 
     function setStatus(message) {
@@ -46,21 +76,19 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
 
     async function boot() {
       try {
-        setStatus('Downloading Pyodide ' + '${PYODIDE_VERSION}' + '…');
+        setStatus('Loading Pyodide from CDN…');
+        // Always boot from CDN for WebView reliability. Offline file:// + wasm is flaky on Android.
+        const cdn = 'https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/';
         pyodide = await loadPyodide({
-          indexURL: 'https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/',
+          indexURL: cdn,
           fullStdLib: true,
         });
 
         pyodide.setStdout({
-          batched: function (text) {
-            if (text) send({ type: 'stdout', data: String(text) });
-          },
+          batched: function (text) { if (text) queueStdout(text); },
         });
         pyodide.setStderr({
-          batched: function (text) {
-            if (text) send({ type: 'stderr', data: String(text) });
-          },
+          batched: function (text) { if (text) queueStderr(text); },
         });
 
         await pyodide.loadPackage(['micropip']);
@@ -70,6 +98,7 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
           engine: 'python',
           version: pyodide.version || '${PYODIDE_VERSION}',
           pyodideVersion: pyodide.version || '${PYODIDE_VERSION}',
+          offline: false,
         });
       } catch (err) {
         send({ type: 'error', message: String(err && err.message ? err.message : err) });
@@ -88,27 +117,41 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
       setStatus('Ready');
     }
 
-    async function runCode(code, autoInstall) {
+    async function runCode(code, autoInstall, timeoutMs) {
       if (!pyodide) throw new Error('Python runtime not ready');
       if (running) throw new Error('A program is already running');
       running = true;
       interrupted = false;
       const started = Date.now();
+      const limit = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 30000;
       try {
         if (autoInstall) {
           setStatus('Resolving imports…');
           await pyodide.loadPackagesFromImports(code);
         }
         setStatus('Running…');
-        await pyodide.runPythonAsync(code);
+        const work = pyodide.runPythonAsync(code);
+        const timeout = new Promise(function (_, reject) {
+          runTimer = setTimeout(function () {
+            interrupted = true;
+            reject(new Error('Timed out after ' + limit + ' ms (possible infinite loop)'));
+          }, limit);
+        });
+        await Promise.race([work, timeout]);
+        flushStreams();
         send({ type: 'done', ok: !interrupted, durationMs: Date.now() - started });
       } catch (err) {
+        flushStreams();
         const message = String(err && err.message ? err.message : err);
-        if (!interrupted) {
-          send({ type: 'stderr', data: message + '\\n' });
+        if (!interrupted || message.indexOf('Timed out') >= 0) {
+          queueStderr(message + '\\n');
+          flushStreams();
+          send({ type: 'error_detail', message: message, line: null });
         }
         send({ type: 'done', ok: false, durationMs: Date.now() - started });
       } finally {
+        if (runTimer) clearTimeout(runTimer);
+        runTimer = null;
         running = false;
         setStatus('Ready');
       }
@@ -139,13 +182,11 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
 
       if (msg.type === 'interrupt') {
         interrupted = true;
+        if (runTimer) clearTimeout(runTimer);
         pendingInputs.forEach(function (waiter) {
           waiter.reject(new Error('Interrupted'));
         });
         pendingInputs.clear();
-        try {
-          if (pyodide) pyodide.globals.set('__interrupt__', true);
-        } catch (e) {}
         return;
       }
 
@@ -157,7 +198,7 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
       }
 
       if (msg.type === 'run') {
-        runCode(msg.code || '', !!msg.autoInstall).catch(function (err) {
+        runCode(msg.code || '', !!msg.autoInstall, msg.timeoutMs).catch(function (err) {
           send({ type: 'error', message: String(err && err.message ? err.message : err) });
           running = false;
         });
@@ -170,8 +211,17 @@ export const PYODIDE_HTML = `<!DOCTYPE html>
     window.addEventListener('message', function (event) {
       handleMessage(event.data);
     });
+    window.__coderunner_handle = handleMessage;
 
     boot();
   </script>
 </body>
 </html>`;
+}
+
+export function cdnPyodideIndexUrl(): string {
+  return `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+}
+
+/** @deprecated Prefer buildPyodideHtml(cdnUrl) */
+export const PYODIDE_HTML = buildPyodideHtml(cdnPyodideIndexUrl());

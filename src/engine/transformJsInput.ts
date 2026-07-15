@@ -114,7 +114,6 @@ export function transformJsInputCalls(source: string): string {
 
 export function wrapJsUserCode(transformed: string): string {
   return `
-"use strict";
 async function __user_main() {
 ${transformed}
 }

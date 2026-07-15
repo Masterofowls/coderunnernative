@@ -24,5 +24,6 @@ describe('wrapJsUserCode', () => {
     const wrapped = wrapJsUserCode('console.log(1)');
     expect(wrapped).toContain('async function __user_main()');
     expect(wrapped).toContain('await __user_main()');
+    expect(wrapped).not.toContain('"use strict"');
   });
 });

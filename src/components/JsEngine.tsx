@@ -6,22 +6,21 @@ import { JS_RUNNER_HTML } from '../engine/jsRunnerHtml';
 
 interface JsEngineProps {
   onMessage: (raw: string) => void;
+  active: boolean;
 }
 
 export const JsEngine = forwardRef<WebView, JsEngineProps>(function JsEngine(
-  { onMessage },
+  { onMessage, active },
   ref,
 ) {
-  const handleMessage = (event: WebViewMessageEvent) => {
-    onMessage(event.nativeEvent.data);
-  };
+  if (!active) return null;
 
   return (
     <View style={styles.host} pointerEvents="none" accessibilityElementsHidden>
       <WebView
         ref={ref}
         source={{ html: JS_RUNNER_HTML, baseUrl: 'https://localhost' }}
-        onMessage={handleMessage}
+        onMessage={(event: WebViewMessageEvent) => onMessage(event.nativeEvent.data)}
         javaScriptEnabled
         domStorageEnabled
         originWhitelist={['*']}

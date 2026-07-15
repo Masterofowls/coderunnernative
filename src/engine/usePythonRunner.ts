@@ -1,7 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { WebView } from 'react-native-webview';
 
-import { EngineToHostSchema, type ConsoleLine, type HostToEngineMessage, type RunnerStatus } from './protocol';
+import { postEngineMessage } from './postEngineMessage';
+import { hintForImportError, parseErrorLine } from './pythonPackages';
+import {
+  EngineToHostSchema,
+  type ConsoleLine,
+  type HostToEngineMessage,
+  type RunnerStatus,
+} from './protocol';
 import { transformInputCalls, wrapUserCode } from './transformInput';
 
 let lineCounter = 0;
@@ -10,15 +17,21 @@ function nextLineId(): string {
   return `line_${lineCounter}`;
 }
 
-export function usePythonRunner() {
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+export function usePythonRunner(_enabled: boolean) {
   const webViewRef = useRef<WebView>(null);
   const [status, setStatus] = useState<RunnerStatus>('booting');
   const [statusMessage, setStatusMessage] = useState('Starting Python runtime…');
   const [pyodideVersion, setPyodideVersion] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [pendingInput, setPendingInput] = useState<{ id: string; prompt: string } | null>(null);
   const [installedPackages, setInstalledPackages] = useState<string[]>([]);
   const [autoInstall, setAutoInstall] = useState(true);
+  const [lastErrorLine, setLastErrorLine] = useState<number | null>(null);
+  const [lastStdout, setLastStdout] = useState('');
+  const stdoutAcc = useRef('');
 
   const appendLine = useCallback((kind: ConsoleLine['kind'], text: string) => {
     setLines((prev) => [...prev, { id: nextLineId(), kind, text }]);
@@ -26,11 +39,13 @@ export function usePythonRunner() {
 
   const clearConsole = useCallback(() => {
     setLines([]);
+    setLastStdout('');
+    stdoutAcc.current = '';
+    setLastErrorLine(null);
   }, []);
 
   const postToEngine = useCallback((message: HostToEngineMessage) => {
-    const payload = JSON.stringify(message);
-    webViewRef.current?.postMessage(payload);
+    postEngineMessage(webViewRef.current, message);
   }, []);
 
   const onEngineMessage = useCallback(
@@ -51,10 +66,13 @@ export function usePythonRunner() {
           const version = msg.pyodideVersion || msg.version || 'unknown';
           setStatus('ready');
           setPyodideVersion(version);
-          setStatusMessage(`Python ${version} ready`);
+          setOffline(Boolean(msg.offline));
+          setStatusMessage(
+            msg.offline ? `Python ${version} ready (offline)` : `Python ${version} ready`,
+          );
           appendLine(
             'system',
-            `Pyodide ${version} ready. Libraries via micropip / loadPackagesFromImports.`,
+            `Pyodide ${version} ready${msg.offline ? ' from offline cache' : ''}.`,
           );
           break;
         }
@@ -65,11 +83,25 @@ export function usePythonRunner() {
           }
           break;
         case 'stdout':
+          stdoutAcc.current += msg.data;
           appendLine('stdout', msg.data);
           break;
-        case 'stderr':
+        case 'stderr': {
           appendLine('stderr', msg.data);
+          const hint = hintForImportError(msg.data);
+          if (hint) appendLine('system', `Hint: ${hint}`);
+          const line = parseErrorLine(msg.data);
+          if (line) setLastErrorLine(line);
           break;
+        }
+        case 'error_detail': {
+          appendLine('stderr', msg.message);
+          const hint = hintForImportError(msg.message);
+          if (hint) appendLine('system', `Hint: ${hint}`);
+          const line = msg.line ?? parseErrorLine(msg.message);
+          if (line) setLastErrorLine(line);
+          break;
+        }
         case 'input_request':
           setStatus('awaiting_input');
           setPendingInput({ id: msg.id, prompt: msg.prompt });
@@ -77,21 +109,33 @@ export function usePythonRunner() {
           break;
         case 'done':
           setPendingInput(null);
+          setLastStdout(stdoutAcc.current);
           setStatus('ready');
           setStatusMessage(
-            msg.ok ? `Finished in ${msg.durationMs} ms` : `Stopped with errors (${msg.durationMs} ms)`,
+            msg.ok
+              ? `Finished in ${msg.durationMs} ms`
+              : `Stopped with errors (${msg.durationMs} ms)`,
           );
-          appendLine('system', msg.ok ? `Done (${msg.durationMs} ms)` : `Finished with errors (${msg.durationMs} ms)`);
+          appendLine(
+            'system',
+            msg.ok
+              ? `Done (${msg.durationMs} ms)`
+              : `Finished with errors (${msg.durationMs} ms)`,
+          );
           break;
         case 'error':
           setStatus('error');
           setStatusMessage(msg.message);
           appendLine('stderr', msg.message);
+          {
+            const line = parseErrorLine(msg.message);
+            if (line) setLastErrorLine(line);
+          }
           break;
         case 'packages':
-          setInstalledPackages(msg.packages);
+          setInstalledPackages((prev) => Array.from(new Set([...prev, ...msg.packages])));
           setStatus('ready');
-          appendLine('system', `Installed packages: ${msg.packages.join(', ') || '(none listed)'}`);
+          appendLine('system', `Installed: ${msg.packages.join(', ') || '(none)'}`);
           break;
         default:
           break;
@@ -101,26 +145,27 @@ export function usePythonRunner() {
   );
 
   const runCode = useCallback(
-    (code: string) => {
-      if (status === 'booting') {
-        appendLine('system', 'Runtime is still booting…');
+    (code: string, timeoutMs = DEFAULT_TIMEOUT_MS) => {
+      if (!pyodideVersion || status === 'booting') {
+        appendLine('system', 'Python runtime is not ready…');
         return;
       }
-      if (status === 'running' || status === 'awaiting_input') {
+      if (status === 'running' || status === 'awaiting_input' || status === 'installing') {
         appendLine('system', 'Stop the current run before starting another.');
         return;
       }
 
       clearConsole();
-      appendLine('system', '>>> run');
+      appendLine('system', '>>> run python');
       setStatus('running');
       setStatusMessage('Running…');
+      stdoutAcc.current = '';
 
       const transformed = transformInputCalls(code);
       const wrapped = wrapUserCode(transformed);
-      postToEngine({ type: 'run', code: wrapped, autoInstall });
+      postToEngine({ type: 'run', code: wrapped, autoInstall, timeoutMs });
     },
-    [appendLine, autoInstall, clearConsole, postToEngine, status],
+    [appendLine, autoInstall, clearConsole, postToEngine, pyodideVersion, status],
   );
 
   const submitStdin = useCallback(
@@ -150,10 +195,10 @@ export function usePythonRunner() {
   const interrupt = useCallback(() => {
     postToEngine({ type: 'interrupt' });
     setPendingInput(null);
-    setStatus('ready');
+    setStatus(pyodideVersion ? 'ready' : 'booting');
     setStatusMessage('Interrupted');
     appendLine('system', 'Interrupted');
-  }, [appendLine, postToEngine]);
+  }, [appendLine, postToEngine, pyodideVersion]);
 
   const consoleText = useMemo(() => lines.map((l) => l.text).join(''), [lines]);
 
@@ -162,8 +207,11 @@ export function usePythonRunner() {
     status,
     statusMessage,
     pyodideVersion,
+    offline,
     lines,
     consoleText,
+    lastStdout,
+    lastErrorLine,
     pendingInput,
     installedPackages,
     autoInstall,

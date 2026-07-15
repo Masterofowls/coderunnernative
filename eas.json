@@ -21,6 +21,9 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
       "env": {
         "EXPO_PUBLIC_ENVIRONMENT": "preview"
       }
@@ -33,6 +36,12 @@
       },
       "env": {
         "EXPO_PUBLIC_ENVIRONMENT": "production"
+      }
+    },
+    "production-aab": {
+      "extends": "production",
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   },
