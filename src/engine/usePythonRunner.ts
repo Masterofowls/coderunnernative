@@ -9,7 +9,7 @@ import {
   type HostToEngineMessage,
   type RunnerStatus,
 } from './protocol';
-import { transformInputCalls, wrapUserCode } from './transformInput';
+import { prepareUserPython } from './transformInput';
 
 let lineCounter = 0;
 function nextLineId(): string {
@@ -161,8 +161,7 @@ export function usePythonRunner(_enabled: boolean) {
       setStatusMessage('Running…');
       stdoutAcc.current = '';
 
-      const transformed = transformInputCalls(code);
-      const wrapped = wrapUserCode(transformed);
+      const wrapped = prepareUserPython(code);
       postToEngine({ type: 'run', code: wrapped, autoInstall, timeoutMs });
     },
     [appendLine, autoInstall, clearConsole, postToEngine, pyodideVersion, status],

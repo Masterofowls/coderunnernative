@@ -1,5 +1,16 @@
 # Activity Log
 
+## 2026-07-15T05:34:00-07:00
+
+- Rebuilt signed release APK (`npm run apk:release`) including input()/async-def fix.
+- Output: `dist/CodeRunnerNative-release.apk`.
+
+## 2026-07-15T05:04:00-07:00
+
+- Fixed Python `SyntaxError: 'await' outside async function` when `input()` is
+  inside a sync `def`: promote those defs to `async def` and await call sites
+  (`asyncifyAwaitingCode` / `prepareUserPython`). Regression tests added.
+
 ## 2026-07-15T03:46:00-07:00
 
 - Rebuilt signed release APK via `npm run apk:release` (same local pipeline).
