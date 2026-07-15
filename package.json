@@ -21,6 +21,7 @@
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.4",
+    "expo-clipboard": "~57.0.0",
     "expo-dev-client": "~57.0.5",
     "expo-haptics": "~57.0.0",
     "expo-keep-awake": "~57.0.0",

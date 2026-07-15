@@ -1,32 +1,35 @@
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { CodeExample } from '../engine/examples';
+import type { CodeLanguage } from '../engine/language';
 import type { RunnerStatus } from '../engine/protocol';
 import { colors } from '../theme/colors';
 
 interface ToolbarProps {
+  language: CodeLanguage;
+  onLanguageChange: (language: CodeLanguage) => void;
   status: RunnerStatus;
   statusMessage: string;
-  autoInstall: boolean;
-  onAutoInstallChange: (value: boolean) => void;
   examples: CodeExample[];
   onSelectExample: (example: CodeExample) => void;
   onRun: () => void;
   onStop: () => void;
-  onClear: () => void;
+  onClearConsole: () => void;
+  onOpenPackages?: () => void;
   canRun: boolean;
 }
 
 export function Toolbar({
+  language,
+  onLanguageChange,
   status,
   statusMessage,
-  autoInstall,
-  onAutoInstallChange,
   examples,
   onSelectExample,
   onRun,
   onStop,
-  onClear,
+  onClearConsole,
+  onOpenPackages,
   canRun,
 }: ToolbarProps) {
   const busy = status === 'running' || status === 'awaiting_input' || status === 'installing';
@@ -50,7 +53,7 @@ export function Toolbar({
           onPress={onRun}
           disabled={!canRun || busy}
           accessibilityRole="button"
-          accessibilityLabel="Run Python code"
+          accessibilityLabel="Run code"
         >
           <Text style={styles.btnTextDark}>Run</Text>
         </Pressable>
@@ -58,13 +61,13 @@ export function Toolbar({
           style={({ pressed }) => [styles.btn, styles.stop, pressed && styles.pressed]}
           onPress={onStop}
           accessibilityRole="button"
-          accessibilityLabel="Stop Python code"
+          accessibilityLabel="Stop code"
         >
           <Text style={styles.btnTextDark}>Stop</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.btn, styles.ghost, pressed && styles.pressed]}
-          onPress={onClear}
+          onPress={onClearConsole}
           accessibilityRole="button"
           accessibilityLabel="Clear console"
         >
@@ -73,14 +76,28 @@ export function Toolbar({
       </View>
 
       <View style={styles.row}>
-        <Text style={styles.switchLabel}>Auto-import packages</Text>
-        <Switch
-          value={autoInstall}
-          onValueChange={onAutoInstallChange}
-          trackColor={{ false: colors.border, true: colors.accent }}
-          thumbColor={colors.text}
-          accessibilityLabel="Automatically install imported packages"
-        />
+        <View style={styles.langGroup}>
+          <LangTab
+            label="Python"
+            active={language === 'python'}
+            onPress={() => onLanguageChange('python')}
+          />
+          <LangTab
+            label="JavaScript"
+            active={language === 'javascript'}
+            onPress={() => onLanguageChange('javascript')}
+          />
+        </View>
+        {language === 'python' && onOpenPackages ? (
+          <Pressable
+            style={({ pressed }) => [styles.btn, styles.ghost, pressed && styles.pressed]}
+            onPress={onOpenPackages}
+            accessibilityRole="button"
+            accessibilityLabel="Open packages menu"
+          >
+            <Text style={styles.btnTextLight}>Packages</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -100,9 +117,31 @@ export function Toolbar({
   );
 }
 
+function LangTab({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.langTab, active && styles.langTabActive]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`Switch to ${label}`}
+    >
+      <Text style={[styles.langTabText, active && styles.langTabTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   wrap: {
-    gap: 10,
+    gap: 8,
   },
   row: {
     flexDirection: 'row',
@@ -115,19 +154,19 @@ const styles = StyleSheet.create({
   },
   brand: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   status: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
   },
   btn: {
     borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   run: {
     backgroundColor: colors.success,
@@ -156,10 +195,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  switchLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
+  langGroup: {
     flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 3,
+    gap: 3,
+  },
+  langTab: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  langTabActive: {
+    backgroundColor: colors.accent,
+  },
+  langTabText: {
+    color: colors.textMuted,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  langTabTextActive: {
+    color: '#0b1016',
   },
   chips: {
     gap: 8,
@@ -171,7 +232,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   chipText: {
     color: colors.text,

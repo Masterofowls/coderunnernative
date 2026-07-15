@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 export const EngineToHostSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('ready'), pyodideVersion: z.string() }),
+  z.object({
+    type: z.literal('ready'),
+    pyodideVersion: z.string().optional(),
+    version: z.string().optional(),
+    engine: z.string().optional(),
+  }),
   z.object({ type: z.literal('status'), message: z.string() }),
   z.object({ type: z.literal('stdout'), data: z.string() }),
   z.object({ type: z.literal('stderr'), data: z.string() }),

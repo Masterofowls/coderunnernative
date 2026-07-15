@@ -1,5 +1,22 @@
 # Activity Log
 
+## 2026-07-14T19:15:30-07:00
+
+- Rebuilt signed release APK to `dist/CodeRunnerNative-release.apk` (~71 MB; editor + JS runner).
+
+## 2026-07-14T19:15:00-07:00
+
+- Enlarged syntax-highlighted CodeMirror editor; added Clear / Copy / Paste.
+- Moved Python micropip + auto-import into Packages submenu.
+- Added JavaScript runner with `prompt()` / `input()` stdin bridge.
+- Language tabs (Python | JavaScript) with per-language persistence.
+
+## 2026-07-14T19:07:00-07:00
+
+- Created GitHub release `v1.0.0` with `gh release create` and uploaded
+  `dist/CodeRunnerNative-release.apk`.
+- URL: https://github.com/Masterofowls/coderunnernative/releases/tag/v1.0.0
+
 ## 2026-07-14T19:00:00-07:00
 
 - Built signed release APK: `dist/CodeRunnerNative-release.apk` (~70.9 MB).

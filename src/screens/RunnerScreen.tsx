@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -13,55 +8,100 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CodeEditor } from '../components/CodeEditor';
 import { ConsolePanel } from '../components/ConsolePanel';
-import { PackageBar } from '../components/PackageBar';
+import { JsEngine } from '../components/JsEngine';
+import { PackagesMenu } from '../components/PackagesMenu';
 import { PythonEngine } from '../components/PythonEngine';
 import { StdinPrompt } from '../components/StdinPrompt';
 import { Toolbar } from '../components/Toolbar';
 import { EXAMPLES, type CodeExample } from '../engine/examples';
+import { JS_EXAMPLES } from '../engine/examplesJs';
+import { storageKeyFor, type CodeLanguage } from '../engine/language';
+import { useJsRunner } from '../engine/useJsRunner';
 import { usePythonRunner } from '../engine/usePythonRunner';
 import { colors } from '../theme/colors';
 
-const CODE_STORAGE_KEY = 'coderunner.editor.code';
+const LANGUAGE_KEY = 'coderunner.language';
 
 export function RunnerScreen() {
-  const [code, setCode] = useState(EXAMPLES[1]?.code ?? EXAMPLES[0].code);
-  const runner = usePythonRunner();
+  const [language, setLanguage] = useState<CodeLanguage>('python');
+  const [pythonCode, setPythonCode] = useState(EXAMPLES[1]?.code ?? EXAMPLES[0].code);
+  const [jsCode, setJsCode] = useState(JS_EXAMPLES[1]?.code ?? JS_EXAMPLES[0].code);
+  const [packagesOpen, setPackagesOpen] = useState(false);
+
+  const python = usePythonRunner();
+  const js = useJsRunner();
+
+  const code = language === 'python' ? pythonCode : jsCode;
+  const setCode = language === 'python' ? setPythonCode : setJsCode;
+  const active = language === 'python' ? python : js;
+  const examples = useMemo(
+    () => (language === 'python' ? EXAMPLES : JS_EXAMPLES),
+    [language],
+  );
 
   useEffect(() => {
-    void AsyncStorage.getItem(CODE_STORAGE_KEY).then((saved) => {
-      if (saved) setCode(saved);
+    void AsyncStorage.getItem(LANGUAGE_KEY).then((saved) => {
+      if (saved === 'python' || saved === 'javascript') setLanguage(saved);
+    });
+    void AsyncStorage.getItem(storageKeyFor('python')).then((saved) => {
+      if (saved) setPythonCode(saved);
+    });
+    void AsyncStorage.getItem(storageKeyFor('javascript')).then((saved) => {
+      if (saved) setJsCode(saved);
     });
   }, []);
 
   useEffect(() => {
+    void AsyncStorage.setItem(LANGUAGE_KEY, language);
+  }, [language]);
+
+  useEffect(() => {
     const handle = setTimeout(() => {
-      void AsyncStorage.setItem(CODE_STORAGE_KEY, code);
+      void AsyncStorage.setItem(storageKeyFor('python'), pythonCode);
     }, 400);
     return () => clearTimeout(handle);
-  }, [code]);
+  }, [pythonCode]);
 
-  const handleSelectExample = useCallback((example: CodeExample) => {
-    setCode(example.code);
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      void AsyncStorage.setItem(storageKeyFor('javascript'), jsCode);
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [jsCode]);
+
+  const handleLanguageChange = useCallback((next: CodeLanguage) => {
+    setLanguage(next);
   }, []);
+
+  const handleSelectExample = useCallback(
+    (example: CodeExample) => {
+      setCode(example.code);
+    },
+    [setCode],
+  );
 
   const handleRun = useCallback(async () => {
     try {
-      await activateKeepAwakeAsync('python-run');
+      await activateKeepAwakeAsync('code-run');
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
-      // Keep-awake / haptics are best-effort on unsupported hosts.
+      // best-effort
     }
-    runner.runCode(code);
-  }, [code, runner]);
+    if (language === 'python') {
+      python.runCode(pythonCode);
+    } else {
+      js.runCode(jsCode);
+    }
+  }, [js, language, python, pythonCode, jsCode]);
 
   const handleStop = useCallback(async () => {
-    runner.interrupt();
+    active.interrupt();
     try {
-      deactivateKeepAwake('python-run');
+      deactivateKeepAwake('code-run');
     } catch {
       // ignore
     }
-  }, [runner]);
+  }, [active]);
 
   const handleStdin = useCallback(
     async (value: string) => {
@@ -70,10 +110,20 @@ export function RunnerScreen() {
       } catch {
         // ignore
       }
-      runner.submitStdin(value);
+      active.submitStdin(value);
     },
-    [runner],
+    [active],
   );
+
+  const canRun =
+    language === 'python'
+      ? Boolean(python.pyodideVersion) &&
+        python.status !== 'running' &&
+        python.status !== 'awaiting_input' &&
+        python.status !== 'installing'
+      : js.ready &&
+        js.status !== 'running' &&
+        js.status !== 'awaiting_input';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
@@ -84,40 +134,31 @@ export function RunnerScreen() {
       >
         <View style={styles.container}>
           <Toolbar
-            status={runner.status}
-            statusMessage={runner.statusMessage}
-            autoInstall={runner.autoInstall}
-            onAutoInstallChange={runner.setAutoInstall}
-            examples={EXAMPLES}
+            language={language}
+            onLanguageChange={handleLanguageChange}
+            status={active.status}
+            statusMessage={active.statusMessage}
+            examples={examples}
             onSelectExample={handleSelectExample}
             onRun={handleRun}
             onStop={handleStop}
-            onClear={runner.clearConsole}
-            canRun={
-              Boolean(runner.pyodideVersion) &&
-              runner.status !== 'running' &&
-              runner.status !== 'awaiting_input' &&
-              runner.status !== 'installing'
-            }
-          />
-
-          <PackageBar
-            disabled={runner.status === 'booting' || runner.status === 'running'}
-            onInstall={runner.installPackages}
-            installedPackages={runner.installedPackages}
+            onClearConsole={active.clearConsole}
+            onOpenPackages={language === 'python' ? () => setPackagesOpen(true) : undefined}
+            canRun={canRun}
           />
 
           <CodeEditor
+            language={language}
             value={code}
             onChange={setCode}
-            editable={runner.status !== 'awaiting_input'}
+            editable={active.status !== 'awaiting_input'}
           />
 
-          <ConsolePanel lines={runner.lines} />
+          <ConsolePanel lines={active.lines} />
 
-          {runner.pendingInput ? (
+          {active.pendingInput ? (
             <StdinPrompt
-              prompt={runner.pendingInput.prompt}
+              prompt={active.pendingInput.prompt}
               onSubmit={handleStdin}
               onCancel={handleStop}
             />
@@ -125,7 +166,18 @@ export function RunnerScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      <PythonEngine ref={runner.webViewRef} onMessage={runner.onEngineMessage} />
+      <PythonEngine ref={python.webViewRef} onMessage={python.onEngineMessage} />
+      <JsEngine ref={js.webViewRef} onMessage={js.onEngineMessage} />
+
+      <PackagesMenu
+        visible={packagesOpen}
+        onClose={() => setPackagesOpen(false)}
+        autoInstall={python.autoInstall}
+        onAutoInstallChange={python.setAutoInstall}
+        disabled={python.status === 'booting' || python.status === 'running'}
+        onInstall={python.installPackages}
+        installedPackages={python.installedPackages}
+      />
     </SafeAreaView>
   );
 }
@@ -140,9 +192,9 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 10,
-    gap: 10,
+    paddingHorizontal: 12,
+    paddingTop: 6,
+    paddingBottom: 8,
+    gap: 8,
   },
 });

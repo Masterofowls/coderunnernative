@@ -1,10 +1,10 @@
 # CodeRunner Native
 
-Expo React Native Python code runner with:
+Expo React Native code runner for **Python** and **JavaScript** with:
 
-- Full `input()` console prompts (bridged to native UI)
-- Standard library `import`s
-- Third-party packages via Pyodide `micropip` / auto-import install
+- Syntax-highlighted editor (CodeMirror) with copy / paste / clear
+- Full console input: Python `input()`, JS `prompt()` / `input()`
+- Python stdlib + micropip packages (Packages submenu)
 - Signed Android release APK workflow
 
 ## Quick start

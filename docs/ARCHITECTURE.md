@@ -2,19 +2,21 @@
 
 ## Overview
 
-CodeRunner Native is an Expo React Native app that runs Python on-device via
-**Pyodide** (CPython compiled to WebAssembly) inside a hidden `WebView`.
+CodeRunner Native is an Expo React Native app that runs **Python** (Pyodide) and
+**JavaScript** on-device inside hidden `WebView` sandboxes. The editor uses
+CodeMirror 5 for syntax highlighting.
 
 ```
-┌────────────────────────────────────────────┐
-│ React Native UI                            │
-│  Editor · Console · Stdin · micropip bar   │
-└─────────────────┬──────────────────────────┘
-                  │ postMessage JSON bridge
-┌─────────────────▼──────────────────────────┐
-│ WebView (Pyodide ${PYODIDE_VERSION})       │
-│  stdout/stderr · await __rn_input · micropip│
-└────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ React Native UI                              │
+│  Lang tabs · Highlighted editor · Console    │
+│  Stdin prompt · Packages submenu (Python)    │
+└───────────────┬──────────────┬───────────────┘
+                │              │
+     ┌──────────▼───┐   ┌──────▼──────────┐
+     │ Pyodide WV   │   │ JS sandbox WV   │
+     │ input/micropip│   │ prompt()/input()│
+     └──────────────┘   └─────────────────┘
 ```
 
 ## Why Pyodide

@@ -2,23 +2,21 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { WebView } from 'react-native-webview';
 
 import { EngineToHostSchema, type ConsoleLine, type HostToEngineMessage, type RunnerStatus } from './protocol';
-import { transformInputCalls, wrapUserCode } from './transformInput';
+import { transformJsInputCalls, wrapJsUserCode } from './transformJsInput';
 
 let lineCounter = 0;
 function nextLineId(): string {
   lineCounter += 1;
-  return `line_${lineCounter}`;
+  return `js_line_${lineCounter}`;
 }
 
-export function usePythonRunner() {
+export function useJsRunner() {
   const webViewRef = useRef<WebView>(null);
   const [status, setStatus] = useState<RunnerStatus>('booting');
-  const [statusMessage, setStatusMessage] = useState('Starting Python runtime…');
-  const [pyodideVersion, setPyodideVersion] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState('Starting JavaScript runtime…');
+  const [ready, setReady] = useState(false);
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [pendingInput, setPendingInput] = useState<{ id: string; prompt: string } | null>(null);
-  const [installedPackages, setInstalledPackages] = useState<string[]>([]);
-  const [autoInstall, setAutoInstall] = useState(true);
 
   const appendLine = useCallback((kind: ConsoleLine['kind'], text: string) => {
     setLines((prev) => [...prev, { id: nextLineId(), kind, text }]);
@@ -29,8 +27,7 @@ export function usePythonRunner() {
   }, []);
 
   const postToEngine = useCallback((message: HostToEngineMessage) => {
-    const payload = JSON.stringify(message);
-    webViewRef.current?.postMessage(payload);
+    webViewRef.current?.postMessage(JSON.stringify(message));
   }, []);
 
   const onEngineMessage = useCallback(
@@ -47,22 +44,14 @@ export function usePythonRunner() {
       const msg = result.data;
 
       switch (msg.type) {
-        case 'ready': {
-          const version = msg.pyodideVersion || msg.version || 'unknown';
+        case 'ready':
+          setReady(true);
           setStatus('ready');
-          setPyodideVersion(version);
-          setStatusMessage(`Python ${version} ready`);
-          appendLine(
-            'system',
-            `Pyodide ${version} ready. Libraries via micropip / loadPackagesFromImports.`,
-          );
+          setStatusMessage('JavaScript ready');
+          appendLine('system', 'JavaScript runtime ready. Use prompt()/input() for console input.');
           break;
-        }
         case 'status':
           setStatusMessage(msg.message);
-          if (msg.message.toLowerCase().includes('install')) {
-            setStatus((prev) => (prev === 'running' ? prev : 'installing'));
-          }
           break;
         case 'stdout':
           appendLine('stdout', msg.data);
@@ -73,7 +62,7 @@ export function usePythonRunner() {
         case 'input_request':
           setStatus('awaiting_input');
           setPendingInput({ id: msg.id, prompt: msg.prompt });
-          appendLine('prompt', msg.prompt || 'input> ');
+          appendLine('prompt', msg.prompt || 'prompt> ');
           break;
         case 'done':
           setPendingInput(null);
@@ -81,17 +70,15 @@ export function usePythonRunner() {
           setStatusMessage(
             msg.ok ? `Finished in ${msg.durationMs} ms` : `Stopped with errors (${msg.durationMs} ms)`,
           );
-          appendLine('system', msg.ok ? `Done (${msg.durationMs} ms)` : `Finished with errors (${msg.durationMs} ms)`);
+          appendLine(
+            'system',
+            msg.ok ? `Done (${msg.durationMs} ms)` : `Finished with errors (${msg.durationMs} ms)`,
+          );
           break;
         case 'error':
           setStatus('error');
           setStatusMessage(msg.message);
           appendLine('stderr', msg.message);
-          break;
-        case 'packages':
-          setInstalledPackages(msg.packages);
-          setStatus('ready');
-          appendLine('system', `Installed packages: ${msg.packages.join(', ') || '(none listed)'}`);
           break;
         default:
           break;
@@ -102,7 +89,7 @@ export function usePythonRunner() {
 
   const runCode = useCallback(
     (code: string) => {
-      if (status === 'booting') {
+      if (!ready || status === 'booting') {
         appendLine('system', 'Runtime is still booting…');
         return;
       }
@@ -112,15 +99,15 @@ export function usePythonRunner() {
       }
 
       clearConsole();
-      appendLine('system', '>>> run');
+      appendLine('system', '>>> run javascript');
       setStatus('running');
       setStatusMessage('Running…');
 
-      const transformed = transformInputCalls(code);
-      const wrapped = wrapUserCode(transformed);
-      postToEngine({ type: 'run', code: wrapped, autoInstall });
+      const transformed = transformJsInputCalls(code);
+      const wrapped = wrapJsUserCode(transformed);
+      postToEngine({ type: 'run', code: wrapped, autoInstall: false });
     },
-    [appendLine, autoInstall, clearConsole, postToEngine, status],
+    [appendLine, clearConsole, postToEngine, ready, status],
   );
 
   const submitStdin = useCallback(
@@ -133,18 +120,6 @@ export function usePythonRunner() {
       setStatusMessage('Running…');
     },
     [appendLine, pendingInput, postToEngine],
-  );
-
-  const installPackages = useCallback(
-    (packages: string[]) => {
-      const cleaned = packages.map((p) => p.trim()).filter(Boolean);
-      if (!cleaned.length) return;
-      setStatus('installing');
-      setStatusMessage(`Installing ${cleaned.join(', ')}…`);
-      appendLine('system', `Installing: ${cleaned.join(', ')}`);
-      postToEngine({ type: 'install', packages: cleaned });
-    },
-    [appendLine, postToEngine],
   );
 
   const interrupt = useCallback(() => {
@@ -161,17 +136,13 @@ export function usePythonRunner() {
     webViewRef,
     status,
     statusMessage,
-    pyodideVersion,
+    ready,
     lines,
     consoleText,
     pendingInput,
-    installedPackages,
-    autoInstall,
-    setAutoInstall,
     onEngineMessage,
     runCode,
     submitStdin,
-    installPackages,
     interrupt,
     clearConsole,
   };

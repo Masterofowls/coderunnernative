@@ -25,7 +25,9 @@ export function ConsolePanel({ lines }: ConsolePanelProps) {
         accessibilityLabel="Program console output"
       >
         {lines.length === 0 ? (
-          <Text style={styles.empty}>Output appears here. input() opens a prompt below.</Text>
+          <Text style={styles.empty}>
+            Output appears here. Python input() / JS prompt() open a prompt below.
+          </Text>
         ) : (
           lines.map((line) => (
             <Text key={line.id} style={[styles.line, styleForKind(line.kind)]} selectable>
@@ -55,7 +57,8 @@ function styleForKind(kind: ConsoleLine['kind']) {
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
+    flex: 0.95,
+    minHeight: 120,
     backgroundColor: colors.consoleBg,
     borderRadius: 12,
     borderWidth: 1,
