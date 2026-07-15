@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -39,3 +40,20 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# logs & build outputs
+*.log
+logs/
+build/
+*.apk
+*.aab
+*.ap_
+
+# signing secrets
+credentials/android/keystore.properties
+credentials/android/*.keystore
+credentials/android/*.jks
+!credentials/android/keystore.properties.example
+
+# session / agent noise
+.session-logs/
