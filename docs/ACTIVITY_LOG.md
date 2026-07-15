@@ -1,5 +1,10 @@
 # Activity Log
 
+## 2026-07-14T19:19:00-07:00
+
+- Updated GitHub release `v1.0.0`: replaced APK (`~71 MB`) and refreshed release notes
+  (JS runner + editor UX). https://github.com/Masterofowls/coderunnernative/releases/tag/v1.0.0
+
 ## 2026-07-14T19:15:30-07:00
 
 - Rebuilt signed release APK to `dist/CodeRunnerNative-release.apk` (~71 MB; editor + JS runner).

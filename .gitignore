@@ -57,3 +57,5 @@ credentials/android/*.jks
 
 # session / agent noise
 .session-logs/
+/skills-lock.json
+/CONTRIBUTING.md
